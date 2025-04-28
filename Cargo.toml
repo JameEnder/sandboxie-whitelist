@@ -1,0 +1,15 @@
+[package]
+name = "sandboxie-whitelist"
+version = "0.1.0"
+edition = "2021"
+
+[profile.release]
+strip = true
+opt-level = "z"
+
+[dependencies]
+eframe = "0.29.1"
+egui = "0.29.1"
+egui-file-dialog = "0.7.0"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.137"
