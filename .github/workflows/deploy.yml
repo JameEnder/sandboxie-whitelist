@@ -36,21 +36,6 @@ jobs:
       - name: Build release binary
         run: cargo build --verbose --release --target ${{ matrix.target }}
 
-      # --- Debugging Step ---
-      - name: List target directory contents
-        shell: pwsh
-        run: |
-          $targetDir = "target/${{ matrix.target }}/release"
-          Write-Host "Checking contents of '$targetDir'"
-          if (Test-Path $targetDir) {
-            Get-ChildItem -Path $targetDir -Recurse
-          } else {
-            Write-Host "Directory '$targetDir' not found!"
-          }
-          Write-Host "Current Working Directory: $(Get-Location)"
-          Write-Host "Listing target root:"
-          Get-ChildItem -Path "target" -Depth 1 # Show subdirectories in target
-
       - name: Prepare asset path for release
         id: prepare_asset
         shell: pwsh
