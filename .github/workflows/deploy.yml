@@ -3,10 +3,10 @@ name: Deploy Release Binary
 on:
   push:
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+' # Trigger on semantic version tags like v1.0.0, 1.0.0, 2.3.4 etc.
+      - '[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
-  contents: write # Needed to create releases and upload assets
+  contents: write
 
 jobs:
   build-and-upload:
@@ -36,31 +36,52 @@ jobs:
       - name: Build release binary
         run: cargo build --verbose --release --target ${{ matrix.target }}
 
+      # --- Debugging Step ---
+      - name: List target directory contents
+        shell: pwsh
+        run: |
+          $targetDir = "target/${{ matrix.target }}/release"
+          Write-Host "Checking contents of '$targetDir'"
+          if (Test-Path $targetDir) {
+            Get-ChildItem -Path $targetDir -Recurse
+          } else {
+            Write-Host "Directory '$targetDir' not found!"
+          }
+          Write-Host "Current Working Directory: $(Get-Location)"
+          Write-Host "Listing target root:"
+          Get-ChildItem -Path "target" -Depth 1 # Show subdirectories in target
+
       - name: Prepare asset path for release
-        id: prepare_asset # Give this step an ID to reference its output if needed elsewhere
+        id: prepare_asset
         shell: pwsh
         run: |
           $binaryName = "sandboxie-whitelist"
-          $sourcePath = "target/${{ matrix.target }}/release/$binaryName.exe"
+          # Construct the expected path
+          $sourcePath = Join-Path $env:GITHUB_WORKSPACE "target/${{ matrix.target }}/release/$binaryName.exe"
+          # Define the desired asset name on GitHub Releases
           $assetName = "$binaryName-${{ env.VERSION }}-${{ matrix.target }}.exe"
 
-          # Check if the binary exists
-          if (-not (Test-Path $sourcePath)) {
-            Write-Error "Binary not found at $sourcePath"
+          Write-Host "Checking for binary at expected path: $sourcePath"
+          # Explicitly test the path
+          if (-not (Test-Path $sourcePath -PathType Leaf)) {
+            Write-Error "FATAL: Binary file not found at '$sourcePath'. Build might have failed or produced output elsewhere."
+            # List contents again for detailed debugging just before erroring
+            $targetDir = "target/${{ matrix.target }}/release"
+             if (Test-Path $targetDir) { Get-ChildItem -Path $targetDir -Recurse } else { Write-Host "'$targetDir' not found."}
             exit 1
           }
+          Write-Host "Binary found!"
 
-          # Format for softprops/action-gh-release: "path/to/local/file=asset-name-on-release.ext"
-          # If you don't want to rename, just use the $sourcePath
+          # Use the full, unambiguous path for the 'files' input part
           $assetInfo = "$sourcePath=$assetName"
-          # $assetInfo = $sourcePath # Use this line instead if you want the asset name to be just "sandboxie-whitelist.exe"
+          # $assetInfo = $sourcePath # Alternative: Use this if you DON'T want to rename the asset on release
 
           echo "ASSET_INFO=$assetInfo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "Asset path and name prepared: $assetInfo"
+          Write-Host "Asset info for release step: $assetInfo"
 
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: ${{ env.ASSET_INFO }}
+          files: ${{ env.ASSET_INFO }} # Use the prepared path/name combo
           fail_on_unmatched_files: true
