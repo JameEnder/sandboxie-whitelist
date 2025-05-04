@@ -56,29 +56,41 @@ jobs:
         shell: pwsh
         run: |
           $binaryName = "sandboxie-whitelist"
-          # Construct the expected path
-          $sourcePath = Join-Path $env:GITHUB_WORKSPACE "target/${{ matrix.target }}/release/$binaryName.exe"
+          # Use RELATIVE path from the workspace root
+          $relativeSourcePath = "target/${{ matrix.target }}/release/$binaryName.exe"
           # Define the desired asset name on GitHub Releases
           $assetName = "$binaryName-${{ env.VERSION }}-${{ matrix.target }}.exe"
 
-          Write-Host "Checking for binary at expected path: $sourcePath"
-          # Explicitly test the path
-          if (-not (Test-Path $sourcePath -PathType Leaf)) {
-            Write-Error "FATAL: Binary file not found at '$sourcePath'. Build might have failed or produced output elsewhere."
-            # List contents again for detailed debugging just before erroring
-            $targetDir = "target/${{ matrix.target }}/release"
-             if (Test-Path $targetDir) { Get-ChildItem -Path $targetDir -Recurse } else { Write-Host "'$targetDir' not found."}
+          Write-Host "Current Directory (PWD): $(Get-Location)"
+          Write-Host "Checking for binary at relative path: $relativeSourcePath"
+          # Test the relative path from the current directory (should be workspace root)
+          if (-not (Test-Path $relativeSourcePath -PathType Leaf)) {
+            Write-Error "FATAL: Binary file not found at relative path '$relativeSourcePath'. Build might have failed or produced output elsewhere."
+            # More detailed listing for debug:
+            Write-Host "Listing contents of 'target/${{ matrix.target }}/release':"
+            if(Test-Path "target/${{ matrix.target }}/release") { Get-ChildItem -Path "target/${{ matrix.target }}/release" } else { Write-Host "Directory not found." }
+            Write-Host "Listing contents of 'target/${{ matrix.target }}':"
+            if(Test-Path "target/${{ matrix.target }}") { Get-ChildItem -Path "target/${{ matrix.target }}" } else { Write-Host "Directory not found." }
+             Write-Host "Listing contents of 'target':"
+            if(Test-Path "target") { Get-ChildItem -Path "target" } else { Write-Host "Directory not found." }
             exit 1
           }
-          Write-Host "Binary found!"
+          Write-Host "Binary found at relative path!"
 
-          # Use the full, unambiguous path for the 'files' input part
-          $assetInfo = "$sourcePath=$assetName"
-          # $assetInfo = $sourcePath # Alternative: Use this if you DON'T want to rename the asset on release
+          # Format for softprops/action-gh-release using RELATIVE path and renaming syntax
+          $assetInfo = "$relativeSourcePath=$assetName"
+          # $assetInfo = $relativeSourcePath # Alternative: Use this if you DON'T want to rename the asset on release
 
           echo "ASSET_INFO=$assetInfo" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host "Asset info for release step: $assetInfo"
 
+      - name: Upload Release Asset
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          # Pass the string like "target/x86_64-pc-windows-gnu/release/sandboxie-whitelist.exe=sandboxie-whitelist-0.1.0-x86_64-pc-windows-gnu.exe"
+          files: ${{ env.ASSET_INFO }}
+          fail_on_unmatched_files: true
       - name: Upload Release Asset
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
